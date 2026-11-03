@@ -33,6 +33,7 @@ import re
 import subprocess
 import sys
 import threading
+import traceback
 import time
 from pathlib import Path
 from .naming import safe_name, source_title, is_source_reference, document_title
@@ -298,6 +299,8 @@ def _request_api(messages, system, key, model, url, max_tokens, thinking=True, t
             if e.code in (429, 500, 502, 503, 504) and attempt < retries:
                 time.sleep(5 * attempt)
                 continue
+            if e.code in (429, 503):
+                raise RuntimeError("模型服务暂时繁忙或限流（HTTP %s），重试后仍未恢复，请稍后重试任务。%s" % (e.code, detail)) from e
             raise RuntimeError("API 失败：" + last)
         except Exception as e:  # noqa: BLE001
             last = str(e)[:300]
@@ -627,6 +630,8 @@ def copy_prepared(source, target):
 def make_notes(args, cfg, q, outdir, key, model, url, base, span):
     """对已准备素材的单个目录生成笔记 Markdown，返回 dict。"""
     manifest, transcript, frames, code_frames = load_outputs(outdir)
+    if not transcript.strip() and manifest.get('transcript_status') != 'skipped':
+        _WARNINGS.append('未获得字幕或语音转写，本次仅根据画面生成，可能遗漏讲解内容；请修复转写后重试')
     if getattr(args, "merge", False):
         # 整合模式下每个视频用自己的标题，避免全部用整合任务的标题
         title = find_title(argparse.Namespace(title=None, input=args.input), manifest)
@@ -972,5 +977,15 @@ def merge_progress(outdir, target):
         pass
 
 
+def cli():
+    try:
+        main()
+        return 0
+    except Exception as error:
+        prog('error', 100, str(error), True)
+        traceback.print_exc()
+        return 1
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(cli())

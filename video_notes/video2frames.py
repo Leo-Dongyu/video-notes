@@ -521,6 +521,7 @@ def main():
         "duration_sec": round(dur, 2), "width": w, "height": h,
         "subtitle_source": subtitle_source, "asr_model": asr_model,
         "transcript_lines": n_lines, "frames": len(pairs),
+        "transcript_status": "available" if n_lines else ("skipped" if args.no_asr else "unavailable"),
         "code_frames": len(code_frames),
         "params": {"max_height": args.max_height, "scene": args.scene,
                    "interval": args.interval, "width": args.width},

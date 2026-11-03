@@ -3,6 +3,6 @@ import sys
 from video_notes import video2notes as _implementation
 
 if __name__ == "__main__":
-    _implementation.main()
+    raise SystemExit(_implementation.cli())
 else:
     sys.modules[__name__] = _implementation

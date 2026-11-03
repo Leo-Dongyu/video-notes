@@ -8,8 +8,9 @@ import subprocess
 import sys
 
 from .runtime import find_browser, find_executable
+from .paths import PROJECT_ROOT
 
-PACKAGES = ('yt-dlp', 'Pillow', 'requests', 'qrcode', 'Markdown', 'Pygments', 'faster-whisper')
+PACKAGES = ('yt-dlp', 'Pillow', 'requests', 'qrcode', 'Markdown', 'Pygments', 'faster-whisper', 'av')
 
 
 def diagnose():
@@ -26,12 +27,12 @@ def diagnose():
             add(name, False, 'Missing: run install.bat')
     if any(c['name'] == 'faster-whisper' and c['ok'] for c in checks):
         try:
-            loaded = subprocess.run([sys.executable, '-c', 'import faster_whisper'],
+            loaded = subprocess.run([sys.executable, str(PROJECT_ROOT / 'video_notes' / 'asr_health.py')],
                                     capture_output=True, timeout=30)
-            add('ASR runtime', loaded.returncode == 0,
-                'Loaded' if loaded.returncode == 0 else 'Cannot load ASR. Check Visual C++ x64 runtime; see docs/WINDOWS.md')
+            add('ASR audio decoder', loaded.returncode == 0,
+                'WAV decode passed' if loaded.returncode == 0 else 'Cannot decode audio. Run install.bat to restore compatible PyAV; check Visual C++ x64 runtime.')
         except (OSError, subprocess.TimeoutExpired):
-            add('ASR runtime', False, 'ASR import failed or timed out; see docs/WINDOWS.md')
+            add('ASR audio decoder', False, 'Audio decode failed or timed out; see docs/WINDOWS.md')
     for name, variable in (('ffmpeg', 'VIDEONOTES_FFMPEG'), ('ffprobe', 'VIDEONOTES_FFPROBE')):
         path = find_executable(name, variable)
         add(name, path is not None, path or 'Install FFmpeg and add its bin directory to PATH')

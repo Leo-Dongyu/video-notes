@@ -6,3 +6,5 @@ qrcode[pil]==8.2
 Markdown==3.8
 Pygments==2.19.1
 faster-whisper==1.2.1
+# faster-whisper 1.2.1 uses av.open(metadata_errors=...), removed in PyAV 19.
+av==18.1.0

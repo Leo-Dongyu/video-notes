@@ -42,7 +42,8 @@ class WebTests(unittest.TestCase):
         with urllib.request.urlopen(self.base + '/api/instance') as response:
             instance = json.load(response)
         self.assertEqual(Path(instance['root']), server.HERE)
-        self.assertEqual(instance['version'], '0.1.0')
+        from video_notes import __version__
+        self.assertEqual(instance['version'], __version__)
 
     def test_status_uses_remote_verification_result(self):
         with patch.object(server, 'login_status', return_value={'status': 'unknown', 'loggedIn': None, 'count': 8}):

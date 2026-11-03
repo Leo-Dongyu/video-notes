@@ -8,6 +8,8 @@
 
 升级时保留旧目录中的 `config.json`、`cookies/`、`outputs/` 与 `models/`。不要把别人电脑上的 `.venv` 复制过来，Python 环境需要在本机重新安装。
 
+从 0.1.0 升级到 0.1.1 后需重新运行 `install.bat`，使 PyAV 降到已验证兼容的 18.1.0。然后运行 `doctor.bat`，确认 `ASR audio decoder` 的实际 WAV 解码检查通过。0.1.0 中已生成的仅画面笔记不会自动补写语音内容，修复环境后可按需重新生成。
+
 ## 2. 安装 Python
 
 从 [Python 官方 Windows 下载页](https://www.python.org/downloads/windows/) 安装受支持的 **64 位 Python 3.13.x**（或 3.11/3.12）。使用传统安装器时勾选 “Add python.exe to PATH”。如果官方页面默认推荐了更高版本，请明确选择本项目支持的版本。

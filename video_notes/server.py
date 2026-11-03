@@ -31,7 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 from .bili_auth import login_status, verify_jar
-from .naming import safe_name, source_title, task_directory
+from .naming import safe_name, source_title, task_directory, is_source_reference
 from .batch_sources import collection_videos, directory_videos, canonical_video_input
 from .runtime import find_executable
 from . import __version__
@@ -280,6 +280,7 @@ def _env_for_job():
 
 def _pump_progress(job, prog_file, base, span, label, proc):
     while proc.poll() is None:
+        sync_job_title(job)
         try:
             data = json.loads(prog_file.read_text(encoding="utf-8"))
             pct = float(data.get("percent") or 0)
@@ -314,6 +315,12 @@ def _run_cmd(job, cmd, outdir, base, span, label=""):
     logfh.close()
     if rc != 0:
         append_log(job, "[ERR] exit %d\n" % rc)
+        try:
+            progress = json.loads((outdir / 'progress.json').read_text(encoding='utf-8'))
+            if progress.get('stage') == 'error' and progress.get('msg'):
+                raise RuntimeError(str(progress['msg'])[:1000])
+        except (OSError, ValueError):
+            pass
         raise RuntimeError("处理失败（exit %d），详见 run.log" % rc)
 
 
@@ -358,6 +365,19 @@ def save_job_state(job):
         os.replace(tmp, target)
     except OSError:
         pass
+
+
+def sync_job_title(job):
+    """素材元数据就绪后立即同步标题，不等待付费生成成功。"""
+    if job.mode != 'single':
+        return
+    if not (job.options.get('autoTitle') or is_source_reference(job.title) or job.title == '视频笔记'):
+        return
+    title = source_title(job.dir)
+    if title and job.title != title:
+        job.title = title
+        job.inputs[0]['title'] = title
+        save_job_state(job)
 
 
 def finalize_job_names(job):
@@ -485,6 +505,12 @@ def job_worker(job):
     finally:
         job.finished = time.time()
         if not job.deleted:
+            sync_job_title(job)
+            if job.status == 'error':
+                try:
+                    finalize_job_names(job)
+                except OSError as error:
+                    append_log(job, '[title] 目录暂无法重命名：%s\n' % error)
             job.files = collect_files(job)
             save_job_state(job)
 
