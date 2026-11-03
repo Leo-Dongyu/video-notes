@@ -368,6 +368,10 @@ def finalize_job_names(job):
     records = []
     for path in root.rglob('task.json'):
         data = json.loads(path.read_text(encoding='utf-8'))
+        # 重命名前解析仍存在的路径，统一 Windows 8.3 别名和完整路径。
+        # 目录移动后再解析旧路径，Windows 将无法还原已不存在的短文件名。
+        data['outputs'] = [str(Path(value).resolve()) if Path(value).is_absolute() else str(value)
+                           for value in data.get('outputs', [])]
         title = str(data.get('title') or '')
         if not title or title.startswith(('http://', 'https://')) or re.fullmatch(r'BV\w+|av\d+', title):
             title = source_title(path.parent) or title or '视频笔记'

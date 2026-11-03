@@ -112,7 +112,28 @@ class NamingTests(unittest.TestCase):
         job = server.Job([{'input': 'test.mp4'}], 'single', '标题', 'pdf', 'fast', '', False,
                          restore_dir=d, job_id='20261103-110144-775c24')
         server.finalize_job_names(job)
-        self.assertEqual(job.dir, d)
+        self.assertEqual(job.dir.resolve(), d.resolve())
+
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows 8.3 path regression')
+    def test_task_migration_with_windows_short_path_alias(self):
+        import ctypes
+        from ctypes import wintypes
+        get_short = ctypes.windll.kernel32.GetShortPathNameW
+        get_short.argtypes = (wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD)
+        get_short.restype = wintypes.DWORD
+        buffer = ctypes.create_unicode_buffer(32768)
+        if not get_short(str(self.root), buffer, len(buffer)):
+            self.skipTest('Filesystem does not provide Windows short paths')
+        alias = Path(buffer.value)
+        if str(alias).casefold() == str(self.root.resolve()).casefold():
+            self.skipTest('8.3 aliases are disabled on this filesystem')
+        original = self.root
+        try:
+            self.root = alias
+            with patch.object(server, 'OUTPUTS', alias):
+                self.test_existing_task_migration_and_history_reload()
+        finally:
+            self.root = original
 
 
 if __name__ == '__main__':
