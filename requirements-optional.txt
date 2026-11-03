@@ -1,0 +1,2 @@
+# 代码帧 OCR（缺少时仍可由视觉模型读取画面）
+rapidocr-onnxruntime==1.2.3

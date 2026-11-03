@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>视频笔记生成器 · video-notes</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Cpath d='M16 20h32M16 32h24M16 44h18' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">📝</div>
+    <div>
+      <h1>视频笔记生成器</h1>
+      <p class="sub">B站视频 / 合集 / 本地目录 → PDF / Word 学习笔记</p>
+    </div>
+  </div>
+  <div class="actions">
+    <span id="cookiePill" class="pill pill-warn">B站未登录</span>
+    <button id="btnQr" class="btn">B站扫码登录</button>
+    <button id="btnImport" class="btn">从 Chrome 导入</button>
+    <button id="btnSettings" class="btn">设置</button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="card form-card">
+    <h2>1. 选择视频 <span class="hint">可添加多个视频：分别生成多份笔记，或合并成一份整合笔记</span></h2>
+    <div id="sources" class="sources"></div>
+    <button id="btnAddSource" class="btn btn-ghost">＋ 添加视频</button>
+    <button id="btnAddCollection" class="btn btn-ghost">＋ B站合集</button>
+    <button id="btnAddDirectory" class="btn btn-ghost">＋ 本地目录</button>
+    <p class="hint">合集按列表顺序处理；目录按文件名自然排序。可先读取列表查看视频数量，也可直接开始生成。</p>
+
+    <div id="modeRow" class="mode-row" hidden>
+      <span class="label">多视频生成方式</span>
+      <label class="radio"><input type="radio" name="mode" value="separate" checked> 每个视频各生成一份笔记</label>
+      <label class="radio"><input type="radio" name="mode" value="merged"> 合并成一份整合笔记</label>
+    </div>
+
+    <h2>2. 输出设置</h2>
+    <div class="grid grid3">
+      <div class="field">
+        <label for="title">笔记文件名（可选，默认用视频标题）</label>
+        <input id="title" placeholder="留空则自动使用视频标题">
+      </div>
+      <div class="field">
+        <label for="format">输出格式</label>
+        <select id="format">
+          <option value="pdf">PDF</option>
+          <option value="docx">Word（DOCX）</option>
+          <option value="pdf,docx">PDF + Word</option>
+          <option value="md">仅 Markdown</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="quality">笔记精细度</label>
+        <select id="quality">
+          <option value="fast">快速（一次成型，约 1 分钟）</option>
+          <option value="balanced" selected>均衡（分章 + 代码复核，推荐）</option>
+          <option value="precise">精细（多轮复核，长视频更准）</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid grid2">
+      <div class="field">
+        <label for="asrModel">语音识别模型</label>
+        <select id="asrModel">
+          <option value="">默认（small）</option>
+          <option value="tiny">tiny（最快）</option>
+          <option value="base">base</option>
+          <option value="small">small</option>
+          <option value="medium">medium（更准，较慢）</option>
+        </select>
+      </div>
+    </div>
+    <details class="advanced">
+      <summary>高级选项</summary>
+      <div class="grid grid3">
+        <div class="field"><label for="maxHeight">最大分辨率</label>
+          <select id="maxHeight"><option value="">默认</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select>
+        </div>
+        <div class="field"><label for="maxFrames">最多关键帧</label><input id="maxFrames" type="number" min="4" placeholder="默认"></div>
+        <div class="field"><label for="interval">抽帧最小间隔（秒）</label><input id="interval" type="number" step="0.5" min="0.5" placeholder="默认"></div>
+      </div>
+    </details>
+    <div class="submit-row">
+      <button id="btnSubmit" class="btn btn-primary btn-lg">开始生成笔记</button>
+      <span id="submitHint" class="hint"></span>
+    </div>
+  </section>
+
+  <section class="card progress-card">
+    <h2>3. 进度 <span class="hint">精细到每个阶段与章节</span></h2>
+    <div id="jobEmpty" class="empty">还没有任务。填好左侧后点击「开始生成笔记」。</div>
+    <div id="jobPanel" hidden>
+      <div class="job-head">
+        <div class="job-head-main">
+          <div id="jobTitle" class="job-title">—</div>
+          <div id="jobMeta" class="hint"></div>
+        </div>
+        <div id="percentBadge" class="percent">0%</div>
+      </div>
+      <div class="job-actions">
+        <button id="btnStopJob" class="btn btn-sm" hidden>停止任务</button>
+        <button id="btnRetryJob" class="btn btn-sm" hidden>重试 / 继续</button>
+        <button id="btnDeleteJob" class="btn btn-sm btn-danger" title="删除该任务及其全部产物（不可恢复）">🗑 删除任务</button>
+      </div>
+      <div class="bar"><div id="barFill" class="bar-fill"></div></div>
+      <div id="stageMsg" class="stage-msg">等待开始…</div>
+      <ol id="steps" class="steps"></ol>
+      <div class="row2"><span id="elapsed" class="hint"></span><span id="eta" class="hint"></span></div>
+
+      <div id="resultBox" class="result" hidden>
+        <h3>✅ 生成完成</h3>
+        <div class="savedir">
+          <span>保存位置</span>
+          <code id="savedPath">—</code>
+          <button id="btnOpenFolder" class="btn btn-sm">打开文件夹</button>
+        </div>
+        <div id="fileList" class="files"></div>
+        <div id="usage" class="hint"></div>
+      </div>
+      <details id="logBox" class="log-box"><summary>运行日志</summary><pre id="log"></pre></details>
+    </div>
+  </section>
+</main>
+
+<section class="card history-card">
+  <h2>历史任务 <span class="hint">所有产物都在项目 outputs/ 目录下，可一键删除</span></h2>
+  <div id="history" class="history"></div>
+</section>
+
+<!-- 设置 -->
+<div class="modal" id="modalSettings" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><h3>设置</h3><button class="btn btn-icon" data-close>✕</button></div>
+    <div class="field"><label for="setKey">DeepSeek API Key</label>
+      <input id="setKey" type="password" placeholder="sk-...（留空表示不修改）">
+      <p id="keyHint" class="hint"></p>
+    </div>
+    <div class="field"><label for="setModel">模型</label><input id="setModel" placeholder="deepseek-flash"></div>
+    <div class="field"><label for="setBase">API 地址（可选）</label><input id="setBase" placeholder="默认 https://api.deepseek.com/anthropic"></div>
+    <div class="modal-foot"><button class="btn" data-close>取消</button><button id="btnSaveSettings" class="btn btn-primary">保存</button></div>
+  </div>
+</div>
+
+<!-- 扫码登录 -->
+<div class="modal" id="modalQr" hidden>
+  <div class="modal-card modal-qr">
+    <div class="modal-head"><h3>B站扫码登录</h3><button class="btn btn-icon" data-close>✕</button></div>
+    <div class="qr-wrap"><img id="qrImg" alt="二维码" hidden><div id="qrLoading" class="hint">正在生成二维码…</div></div>
+    <p id="qrMsg" class="qr-msg">用哔哩哔哩手机客户端扫一扫</p>
+    <p class="hint">登录会保存在本机，关闭网页或重启服务后可继续使用。系统定期校验状态，即将到期或失效时请重新扫码；实际画质与字幕取决于账号权限和视频本身。</p>
+    <div class="modal-foot"><button id="btnQrRefresh" class="btn">刷新二维码</button><button class="btn" data-close>关闭</button></div>
+  </div>
+</div>
+
+<div class="modal" id="modalPreview" hidden>
+  <div class="modal-card modal-preview">
+    <div class="modal-head"><h3>笔记预览</h3><button class="btn btn-icon" data-close>✕</button></div>
+    <iframe id="notesPreview" title="笔记正文" sandbox=""></iframe>
+  </div>
+</div>
+
+<!-- 文件浏览 -->
+<div class="modal" id="modalFs" hidden>
+  <div class="modal-card modal-fs">
+    <div class="modal-head"><h3 id="fsHeading">选择本地视频</h3><button class="btn btn-icon" data-close>✕</button></div>
+    <div class="fs-bar"><select id="fsDrives" class="fs-drives"></select><input id="fsPath" class="fs-path" readonly><button id="fsUp" class="btn btn-sm">上一级</button></div>
+    <div id="fsDirs" class="fs-list"></div>
+    <div id="fsFiles" class="fs-list"></div>
+    <div class="modal-foot"><button id="btnSelectDirectory" class="btn btn-primary" hidden>使用此目录</button></div>
+  </div>
+</div>
+
+<!-- 删除确认 -->
+<div class="modal" id="modalConfirm" hidden>
+  <div class="modal-card modal-confirm">
+    <div class="modal-head"><h3 id="confirmTitle">确认操作</h3></div>
+    <p id="confirmText" class="confirm-text"></p>
+    <div class="modal-foot"><button class="btn" id="confirmCancel">取消</button><button class="btn btn-danger" id="confirmOk">确认删除</button></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+name: Publish tested Windows release
+on:
+  workflow_run:
+    workflows: ['Windows checks']
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Build audited source archive
+        run: python tools/build_release.py
+      - name: Publish new version once
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $version = python -c "from video_notes import __version__; print(__version__)"
+          $tag = "v$version"
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host "$tag is already published"; exit 0 }
+          gh release create $tag "dist/video-notes-$version-windows-source.zip" --repo $env:GITHUB_REPOSITORY --target $env:RELEASE_SHA --title "Video Notes $tag - Windows" --notes-file CHANGELOG.md
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release publication failed' }
