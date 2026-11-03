@@ -177,7 +177,7 @@ class Job:
         self.asr_model = asr_model or ""
         self.cookies_ok = cookies_ok
         self.options = options or {}
-        self.dir = Path(restore_dir) if restore_dir else task_directory(OUTPUTS, self.id[:15], self.title)
+        self.dir = (Path(restore_dir) if restore_dir else task_directory(OUTPUTS, self.id[:15], self.title)).resolve()
         self.progress_file = self.dir / "progress.json"
         self.log_file = self.dir / "run.log"
         self.status = "queued"
@@ -1086,6 +1086,7 @@ def load_outputs_index():
     for d in sorted(OUTPUTS.iterdir(), reverse=True):
         if not d.is_dir():
             continue
+        d = d.resolve()
         m = re.match(r"^(\d{8}-\d{6})-(.+)$", d.name)
         if not m:
             continue
